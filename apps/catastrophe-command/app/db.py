@@ -554,14 +554,40 @@ def upsert_order(o: dict[str, Any]) -> None:
 
 def add_status(order_id: str, status: str, late_min: int = 0) -> None:
     """Append a status transition and update the order's current status."""
-    _exec(
-        "INSERT INTO order_status_events (order_id, status, late_min) VALUES (%s, %s, %s)",
-        (order_id, status, int(late_min or 0)),
-    )
-    _exec(
-        "UPDATE orders SET status = %s, late_min = %s, updated_at = NOW() WHERE order_id = %s",
-        (status, int(late_min or 0), order_id),
-    )
+    add_status_batch([{"order_id": order_id, "status": status, "late_min": late_min}])
+
+
+def add_status_batch(events: list[dict[str, Any]]) -> None:
+    """Persist status transitions in one checkout and one transaction."""
+    if _pool is None or not events:
+        return
+    rows = [
+        (
+            str(event.get("order_id") or ""),
+            str(event.get("status") or ""),
+            int(event.get("late_min") or 0),
+        )
+        for event in events
+        if event.get("order_id") and event.get("status")
+    ]
+    if not rows:
+        return
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO order_status_events (order_id, status, late_min) "
+                    "VALUES (%s, %s, %s)",
+                    rows,
+                )
+                cur.executemany(
+                    "UPDATE orders SET status = %s, late_min = %s, updated_at = NOW() "
+                    "WHERE order_id = %s",
+                    [(status, late_min, order_id) for order_id, status, late_min in rows],
+                )
+            conn.commit()
+    except Exception as e:
+        log.warning(f"DB status batch skipped: {type(e).__name__}: {e}")
 
 
 def add_refund(order_id: str, reason: str = "", amount: float | None = None,
@@ -801,6 +827,66 @@ def session_refunds(
         """,
         (sid, limit),
     )
+
+
+def session_refunds_with_summary(
+    session_id: str | None = None,
+    city: str | None = None,
+    limit: int = 200,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Fetch refund rows and derive their summary from one Lakebase read."""
+    sid = (session_id or "").strip()
+    city_id = (city or "").strip().lower()
+    empty = {
+        "session_id": sid,
+        "city": city_id,
+        "count": 0,
+        "total": 0.0,
+        "order_ids": [],
+    }
+    if not sid:
+        return [], empty
+
+    rows = _rows(
+        """
+        SELECT r.id, r.order_id, r.amount, r.reason, r.issued_at, r.city,
+               o.kitchen, o.kind
+        FROM refunds r
+        LEFT JOIN orders o
+               ON o.order_id = r.order_id AND o.session_id = r.session_id
+        WHERE r.session_id = %s
+        ORDER BY r.id DESC
+        """,
+        (sid,),
+    )
+    if city_id:
+        city_rows = [
+            row for row in rows
+            if str(row.get("city") or "").strip().lower() == city_id
+        ]
+        if city_rows:
+            rows = city_rows
+
+    total = 0.0
+    order_ids: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        oid = str(row.get("order_id") or "")
+        if oid and oid not in seen:
+            seen.add(oid)
+            order_ids.append(oid)
+        try:
+            total += float(row.get("amount") or 0)
+        except (TypeError, ValueError):
+            pass
+    summary = {
+        "session_id": sid,
+        "city": city_id,
+        "count": len(rows),
+        "total": round(total, 2),
+        "order_ids": order_ids,
+    }
+    return rows[:limit], summary
 
 
 def _latest_session_id() -> str:

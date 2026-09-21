@@ -1046,7 +1046,7 @@
   </div>
 
   <script>
-  const BUILD_ID = "2026-09-02-refund-paint";
+  const BUILD_ID = "2026-09-21-status-batch";
   const CATASTROPHE_ALERT_MS = 5000;
   let bannerTimer = null, catastropheAlertTimer = null;
   let catastropheAlertShowing = false, jamTrafficMsgPending = false;
@@ -2878,6 +2878,8 @@
   let _unloadCtrl = new AbortController();
   let _simPostActive = 0;
   let _simPostQueue = [];
+  let _statusBatch = [];
+  let _statusBatchTimer = null;
   const SIM_POST_MAX = 3;
   let _refundPollIv = null;
   let _statusPollIv = null;
@@ -2897,7 +2899,10 @@
     for (const c of _osrmAborters) c.abort();
     _osrmAborters.clear();
     _simPostQueue = [];
+    _statusBatch = [];
     _simPostActive = 0;
+    clearTimeout(_statusBatchTimer);
+    _statusBatchTimer = null;
     if (_refundPollIv) clearInterval(_refundPollIv);
     if (_statusPollIv) clearInterval(_statusPollIv);
     clearTimeout(saveSessionTimer);
@@ -2977,8 +2982,16 @@
       max_delay_min: v.maxDelay, placed_at: v.placedAt, promised_at: v.promisedAt,
     });
   }
+  function flushStatusBatch() {
+    _statusBatchTimer = null;
+    if (_pageUnloading || !_statusBatch.length) return;
+    const events = _statusBatch;
+    _statusBatch = [];
+    simPost("/api/sim/status-batch", { events });
+  }
   function dbStatus(v, status) {
-    simPost("/api/sim/status", { order_id: v.id, status, late_min: lateOf(v) });
+    _statusBatch.push({ order_id: v.id, status, late_min: lateOf(v) });
+    if (!_statusBatchTimer) _statusBatchTimer = setTimeout(flushStatusBatch, 100);
   }
   // Count a refund once (guards against double-counting the same order across
   // the in-app path and the Lakebase poll) and add its amount to the running sum.

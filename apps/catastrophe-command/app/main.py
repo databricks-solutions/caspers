@@ -20,7 +20,7 @@ from databricks.sdk.service.sql import (
     Format,
 )
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from . import db
@@ -343,6 +343,7 @@ STREAM_NOTIFICATION_LABELS: dict[str, str] = {
 }
 
 INDEX_HTML = Path(__file__).parent.parent / "index.html"
+INDEX_HTML_TEXT = INDEX_HTML.read_text(encoding="utf-8") if INDEX_HTML.exists() else ""
 ws = WorkspaceClient()
 
 _DEMO_STATE_CACHE: dict[str, Any] = {"expires": 0.0, "payload": None}
@@ -386,6 +387,10 @@ class StatusEvent(BaseModel):
     order_id: str
     status: str
     late_min: int = 0
+
+
+class StatusBatch(BaseModel):
+    events: list[StatusEvent]
 
 
 class RefundEvent(BaseModel):
@@ -711,18 +716,17 @@ def _pillars() -> dict[str, Any]:
     }
 
 
-# NOTE: async on purpose. FastAPI runs *sync* (`def`) routes in a bounded
-# threadpool (default 40). The sim fires many rapid POSTs and the agent's chat
-# endpoint blocks a thread for the full LLM+warehouse duration (10-30s), so under
-# load the threadpool saturates. If the page route were sync too, a browser
-# reload would queue behind those busy threads and hang (header spinner never
-# resolves). Serving the page from the event loop keeps reloads instant no matter
-# how busy the threadpool is.
+# Keep the HTML in memory. FileResponse performs file work through AnyIO's
+# worker pool, which is also where FastAPI runs sync Lakebase routes. Returning
+# an in-memory response keeps reloads independent of DB request pressure.
 @app.get("/", include_in_schema=False)
-async def index() -> FileResponse:
-    if not INDEX_HTML.exists():
+async def index() -> HTMLResponse:
+    if not INDEX_HTML_TEXT:
         raise HTTPException(status_code=404, detail="index.html not found")
-    return FileResponse(str(INDEX_HTML), headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
+    return HTMLResponse(
+        INDEX_HTML_TEXT,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.get("/api/health")
@@ -1091,6 +1095,16 @@ def sim_status(body: StatusEvent) -> dict[str, Any]:
     return {"ok": True, "persisted": db.enabled()}
 
 
+@app.post("/api/sim/status-batch")
+def sim_status_batch(body: StatusBatch) -> dict[str, Any]:
+    db.add_status_batch([event.model_dump() for event in body.events])
+    return {
+        "ok": True,
+        "persisted": db.enabled(),
+        "count": len(body.events),
+    }
+
+
 @app.post("/api/sim/refund")
 def sim_refund(body: RefundEvent) -> dict[str, Any]:
     db.add_refund(
@@ -1158,13 +1172,15 @@ def sim_refunds(
     """
     sid = session_id.strip() or None
     city_id = city.strip() or None
-    session_rows = db.session_refunds(sid, city_id, limit)
+    session_rows, summary = db.session_refunds_with_summary(
+        sid, city_id, limit,
+    )
     out: dict[str, Any] = {
         "enabled": db.enabled(),
         "session_refunds": session_rows,
     }
     if include_summary:
-        out["summary"] = db.session_refund_summary(sid, city_id)
+        out["summary"] = summary
     return out
 
 
