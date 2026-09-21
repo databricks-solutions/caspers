@@ -31,7 +31,10 @@
       -webkit-backdrop-filter: blur(10px) saturate(160%);
       border: 1px solid rgba(255,255,255,.6); border-radius: 20px;
       box-shadow: 0 12px 40px rgba(0,0,0,.16); padding: 14px 16px; width: 260px;
-      max-height: calc(100vh - 32px); overflow-y: auto;
+      /* Reserve the bottom-left column for the legend (bottom:68px) and the
+         fab-row (bottom:16px) so a tall dock scrolls internally instead of
+         overlapping them on short viewports. */
+      max-height: calc(100vh - 172px); overflow-y: auto;
     }
     .dock h1 { margin: 0 0 2px; font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
     .dock .sub { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
@@ -1046,7 +1049,7 @@
   </div>
 
   <script>
-  const BUILD_ID = "2026-09-21-city-map-boot";
+  const BUILD_ID = "2026-09-21-boot-zoom-panel";
   const CATASTROPHE_ALERT_MS = 5000;
   let bannerTimer = null, catastropheAlertTimer = null;
   let catastropheAlertShowing = false, jamTrafficMsgPending = false;
@@ -1245,6 +1248,9 @@
   map.getPane("arcadeLabels").classList.add("arcade-map-labels");
   let labelLayer = null;
   L.control.zoom({ position: "bottomright" }).addTo(map);
+  // Persist the operator's manual zoom/pan so Cmd+R restores the exact view
+  // instead of snapping back to the default framing.
+  map.on("zoomend moveend", () => { if (!_pageUnloading) scheduleSaveSession(); });
 
   const routeLayer   = L.layerGroup().addTo(map);
   const trailLayer   = L.layerGroup().addTo(map);   // subtle motion trails (cute themes)
@@ -1527,6 +1533,9 @@
     const el = document.getElementById("buildTag");
     if (el) el.textContent = `build ${BUILD_ID}`;
   }
+  // When resuming a saved session we restore the operator's exact zoom/pan, so
+  // kitchen (re)draws must NOT reframe the map. Reset on every fresh Start.
+  let _suppressFitBounds = false;
   function applyKitchenList(kitchens, cityId = currentCityId) {
     // A fetch/OSRM snap from the previous city may finish after the operator
     // starts another city. Never let that stale result move the current map.
@@ -1540,7 +1549,7 @@
     // Vasco da Gama would zoom the map out over empty river on every load and
     // force the operator to pan back to Ponte 25 de Abril.
     if (ALT && L.latLng(BRIDGE).distanceTo(L.latLng(ALT)) < 5000) pts.push(ALT);
-    if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.2));
+    if (pts.length && !_suppressFitBounds) map.fitBounds(L.latLngBounds(pts).pad(0.2));
     return true;
   }
   async function loadKitchens({ snap = true } = {}) {
@@ -3323,6 +3332,7 @@
   function seedFleet() { for (let i = 0; i < fleetTarget; i++) setTimeout(() => spawnOrder(false), i * 80); }
   async function restart() {
     clearSession();
+    _suppressFitBounds = false; // fresh Replay always reframes to the city
     autoCloseAt = 0;
     dismissCatastropheAlert();
     vehicles.forEach(v => { if (v.marker) vehLayer.removeLayer(v.marker); if (v.custDot) custLayer.removeLayer(v.custDot); v.status = "delivered"; });
@@ -3550,6 +3560,10 @@
       simNowSnapshot: simNow(),
       savedAtWall: Date.now(),
       autoCloseAt,
+      // Preserve the operator's exact map view across refresh.
+      mapView: (typeof map !== "undefined" && map)
+        ? { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() }
+        : null,
       // Keep snapshot small — Apps iframe localStorage quotas are tiny; kitchens
       // reload from cache and notif history is disposable across refresh.
       notifLog: notifLog.slice(-30),
@@ -3691,17 +3705,21 @@
     closeSetup();
     await loadCity(state.city || cfg.city);
     policyBridgeClosed = false; seenPolicyClosed = null;
-    try {
-      await trackedFetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          city: state.city || cfg.city || currentCityId || "",
-          orders: fleetTarget,
-          speed: sim,
-        }),
-      }, 5000);
-    } catch (e) {}
+    // Restore the operator's saved zoom/pan rather than the default framing.
+    const savedView = (state.mapView && Array.isArray(state.mapView.center)
+      && typeof state.mapView.zoom === "number") ? state.mapView : null;
+    _suppressFitBounds = !!savedView;
+    // Re-assert config / reopen route policy / mirror UC in the background — the
+    // values already match the resumed session, so don't block first paint on it.
+    trackedFetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        city: state.city || cfg.city || currentCityId || "",
+        orders: fleetTarget,
+        speed: sim,
+      }),
+    }, 5000).catch(() => {});
 
     if (state.kitchens?.length) {
       applyKitchenList(state.kitchens);
@@ -3736,7 +3754,8 @@
     if (closeCircle) { map.removeLayer(closeCircle); closeCircle = null; }
     clearJams();
 
-    map.setView(CENTER, 14);
+    if (savedView) map.setView(savedView.center, savedView.zoom, { animate: false });
+    else map.setView(CENTER, 14);
     drawAltMarker();
     drawBridgeMarker();
     if (KITCHENS.length) drawKitchens();
@@ -3830,6 +3849,7 @@
   // Launch (or relaunch) the simulation with the chosen city / orders / speed.
   async function startSimulation() {
     clearSession();
+    _suppressFitBounds = false; // fresh Start always reframes to the city
     autoCloseAt = 0;
     dismissCatastropheAlert();
     const cityId = document.getElementById("cfgCity").value;
@@ -3937,16 +3957,22 @@
       bootUrl.searchParams.delete("fresh");
       history.replaceState(null, "", bootUrl.pathname + bootUrl.search + bootUrl.hash);
     }
-    await populateCities();
-    // The shared app config is authoritative. Browser storage can outlive a
-    // previous city selection and must not short-circuit this request.
+    // Boot round-trips are independent — fetch them together so Cmd+R costs one
+    // backend round-trip instead of three sequential ones (cities → config →
+    // session was the bulk of the ~14s reload).
     const localCfg = loadCfg();
-    const serverCfg = await loadServerCfg();
+    const local = loadSession();
+    const [, serverCfg, remote] = await Promise.all([
+      populateCities(),
+      loadServerCfg(),
+      loadServerSession(),
+    ]);
+    // The shared app config is authoritative. Browser storage can outlive a
+    // previous city selection and must not short-circuit it.
     const saved = serverCfg || localCfg;
-    // Repaint the map to the authoritative city immediately. loadCity() only
-    // ran inside resume/start, so any boot path that fell through to the setup
-    // screen left the Amsterdam fallback geography on screen even when the
-    // picker/server said another city (e.g. Paris).
+    // Repaint the map to the authoritative city immediately (known cities use
+    // the in-file registry — no extra fetch) so no Amsterdam fallback frame
+    // lingers. Resume restores kitchens+view; the setup path draws them below.
     if (saved && saved.city) {
       await loadCity(saved.city);
       if (typeof map !== "undefined" && CENTER) {
@@ -3958,8 +3984,6 @@
     // Only compare snapshots that belong to the selected city. Otherwise a
     // newer stale browser snapshot can restore Amsterdam over (for example)
     // the active Paris session.
-    let local = loadSession();
-    let remote = await loadServerSession();
     let session = pickSessionForCfg(local, remote, saved);
     if (session) {
       if (saved) applyCfgToSetup(saved);
@@ -3975,6 +3999,10 @@
       });
     } else if (saved) {
       applyCfgToSetup(saved);
+      // Draw the selected city's kitchens behind the setup screen so the map
+      // shows the real city (not the Amsterdam fallback) before Start.
+      const cachedKitchens = loadKitchenCache(currentCityId);
+      if (cachedKitchens) { applyKitchenList(cachedKitchens, currentCityId); drawKitchens(); }
       openSetup(false);
     } else {
       openSetup(false);
