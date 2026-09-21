@@ -1046,7 +1046,7 @@
   </div>
 
   <script>
-  const BUILD_ID = "2026-09-21-city-cache-fix";
+  const BUILD_ID = "2026-09-21-city-map-boot";
   const CATASTROPHE_ALERT_MS = 5000;
   let bannerTimer = null, catastropheAlertTimer = null;
   let catastropheAlertShowing = false, jamTrafficMsgPending = false;
@@ -3943,6 +3943,18 @@
     const localCfg = loadCfg();
     const serverCfg = await loadServerCfg();
     const saved = serverCfg || localCfg;
+    // Repaint the map to the authoritative city immediately. loadCity() only
+    // ran inside resume/start, so any boot path that fell through to the setup
+    // screen left the Amsterdam fallback geography on screen even when the
+    // picker/server said another city (e.g. Paris).
+    if (saved && saved.city) {
+      await loadCity(saved.city);
+      if (typeof map !== "undefined" && CENTER) {
+        map.setView(CENTER, 14);
+        drawBridgeMarker();
+        drawAltMarker();
+      }
+    }
     // Only compare snapshots that belong to the selected city. Otherwise a
     // newer stale browser snapshot can restore Amsterdam over (for example)
     // the active Paris session.
