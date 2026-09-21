@@ -1046,7 +1046,7 @@
   </div>
 
   <script>
-  const BUILD_ID = "2026-09-21-status-batch";
+  const BUILD_ID = "2026-09-21-city-cache-fix";
   const CATASTROPHE_ALERT_MS = 5000;
   let bannerTimer = null, catastropheAlertTimer = null;
   let catastropheAlertShowing = false, jamTrafficMsgPending = false;
@@ -3678,6 +3678,12 @@
     return (a.savedAtWall || 0) >= (b.savedAtWall || 0) ? a : b;
   }
 
+  function pickSessionForCfg(local, remote, cfg) {
+    const matchingLocal = sessionMatchesCfg(local, cfg) ? local : null;
+    const matchingRemote = sessionMatchesCfg(remote, cfg) ? remote : null;
+    return pickNewerSession(matchingLocal, matchingRemote);
+  }
+
   async function resumeSimulation(state, cfg) {
     fleetTarget = state.fleetTarget || cfg.orders || 45;
     sim = state.sim || cfg.speed || 4;
@@ -3932,13 +3938,18 @@
       history.replaceState(null, "", bootUrl.pathname + bootUrl.search + bootUrl.hash);
     }
     await populateCities();
-    const saved = loadCfg() || await loadServerCfg();
-    // Prefer whichever snapshot is newer — Apps iframe storage is flaky, so
-    // Lakebase is often the only copy that survives refresh.
+    // The shared app config is authoritative. Browser storage can outlive a
+    // previous city selection and must not short-circuit this request.
+    const localCfg = loadCfg();
+    const serverCfg = await loadServerCfg();
+    const saved = serverCfg || localCfg;
+    // Only compare snapshots that belong to the selected city. Otherwise a
+    // newer stale browser snapshot can restore Amsterdam over (for example)
+    // the active Paris session.
     let local = loadSession();
     let remote = await loadServerSession();
-    let session = pickNewerSession(local, remote);
-    if (session && sessionMatchesCfg(session, saved || { city: session.city })) {
+    let session = pickSessionForCfg(local, remote, saved);
+    if (session) {
       if (saved) applyCfgToSetup(saved);
       else applyCfgToSetup({
         city: session.city || "",
