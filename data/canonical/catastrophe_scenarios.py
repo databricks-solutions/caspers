@@ -230,7 +230,7 @@ CITIES: Dict[str, City] = {
         "Ponte Vasco da Gama", (38.76200, -9.04300), 260),
     "washington_dc": City(
         "washington_dc", "Washington, DC", "🇺🇸", "Potomac",
-        "Francis Scott Key Bridge", (38.90456, -77.06885),
+        "Arlington Memorial Bridge", (38.88800, -77.05300),
         "Theodore Roosevelt Bridge", (38.89229, -77.05984), 200),
     "boston": City(
         "boston", "Boston, MA", "🇺🇸", "Charles",
@@ -254,8 +254,8 @@ CITIES: Dict[str, City] = {
         "Wells Street Bridge", (41.88755, -87.63399), 140),
     "minneapolis": City(
         "minneapolis", "Minneapolis, MN", "🇺🇸", "Mississippi",
-        "I-35W St. Anthony Falls Bridge", (44.97948, -93.24479),
-        "Hennepin Avenue Bridge", (44.98533, -93.26386), 200),
+        "Hennepin Avenue Bridge", (44.98533, -93.26386),
+        "I-35W St. Anthony Falls Bridge", (44.97948, -93.24479), 200),
 }
 
 
@@ -271,13 +271,13 @@ CITY_CATASTROPHES: Dict[str, dict] = {
     "warsaw":        {"icon": "💣", "title": "WWII bomb found by the Poniatowski Bridge",     "desc": "Construction crews uncovered unexploded WWII ordnance. A bomb-disposal cordon has closed the Vistula crossing.", "label": "cordoned off"},
     "paris":         {"icon": "📢", "title": "Protest blocks the Pont de la Concorde",        "desc": "A mass manifestation has flooded Place de la Concorde and blocked the Seine crossing.", "label": "blocked"},
     "lisbon":        {"icon": "🌬️", "title": "Atlantic windstorm closes Ponte 25 de Abril",   "desc": "Extreme crosswinds have forced a full safety closure of Ponte 25 de Abril. Tagus traffic is diverted to Ponte Vasco da Gama.", "label": "closed by wind"},
-    "washington_dc": {"icon": "🚓", "title": "Security lockdown on the Key Bridge",           "desc": "A presidential motorcade and Secret Service closure have sealed the Francis Scott Key Bridge over the Potomac.", "label": "locked down"},
+    "washington_dc": {"icon": "🚓", "title": "Motorcade locks down the Arlington Memorial Bridge", "desc": "A presidential motorcade and a rolling Secret Service closure have sealed the Arlington Memorial Bridge. The Potomac crossing reopens once the last black SUV clears — sirens included.", "label": "motorcade"},
     "boston":        {"icon": "🚇", "title": "Red Line derailment on the Longfellow",         "desc": "An MBTA train has derailed on the Longfellow Bridge, which carries the Red Line over the Charles. The bridge is closed.", "label": "derailed"},
     "bangalore":     {"icon": "🚗", "title": "Silk Board gridlock meltdown",                  "desc": "Monsoon waterlogging has turned the Silk Board Junction into total gridlock across the Outer Ring Road.", "label": "gridlocked"},
-    "seoul":         {"icon": "🚗", "title": "Major accident on the Banpo Bridge",            "desc": "A multi-vehicle pile-up has blocked all lanes across the Han River on the Banpo Bridge.", "label": "blocked"},
+    "seoul":         {"icon": "🌊", "title": "Monsoon floods the Banpo Bridge",               "desc": "A monsoon cloudburst has pushed the Han over Banpo's low deck — the bridge is built to flood, and today it delivered. The crossing is closed until the river drops.", "label": "flooded"},
     "tokyo":         {"icon": "📡", "title": "Seismic sensor malfunction shuts the Kachidoki Bridge", "desc": "A faulty seismic sensor triggered a false earthquake alert; the Kachidoki Bridge over the Sumida was automatically shut and awaits inspection.", "label": "closed"},
     "chicago":       {"icon": "🌉", "title": "DuSable Bridge stuck open",                     "desc": "A bascule-lift malfunction during a boat run has left the DuSable Bridge jammed upright over the Chicago River.", "label": "stuck open"},
-    "minneapolis":   {"icon": "❄️", "title": "Blizzard pile-up on I-35W",                     "desc": "Whiteout conditions have caused a chain-reaction crash on the I-35W St. Anthony Falls Bridge over the Mississippi.", "label": "blocked"},
+    "minneapolis":   {"icon": "❄️", "title": "Polar vortex ices the Hennepin Avenue Bridge",   "desc": "A polar vortex has glazed the Hennepin Avenue Bridge deck in black ice. Public Works closed the Mississippi crossing until the salt trucks win.", "label": "iced over"},
 }
 
 

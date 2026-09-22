@@ -12,11 +12,11 @@ CROSSINGS: tuple[tuple[str, str, str, str], ...] = (
     ("warsaw", "Poniatowski Bridge", "Świętokrzyski Bridge", "Vistula"),
     ("paris", "Pont de la Concorde", "Pont Alexandre III", "Seine"),
     ("lisbon", "Ponte 25 de Abril", "Ponte Vasco da Gama", "Tagus"),
-    ("washington_dc", "Francis Scott Key Bridge", "Theodore Roosevelt Bridge", "Potomac"),
+    ("washington_dc", "Arlington Memorial Bridge", "Theodore Roosevelt Bridge", "Potomac"),
     ("boston", "Longfellow Bridge", "Harvard Bridge", "Charles"),
     ("bangalore", "Silk Board Junction", "Agara Junction", "Outer Ring Road"),
     ("seoul", "Banpo Bridge", "Hannam Bridge", "Han"),
     ("tokyo", "Kachidoki Bridge", "Eitai Bridge", "Sumida"),
     ("chicago", "DuSable Bridge", "Wells Street Bridge", "Chicago River"),
-    ("minneapolis", "I-35W St. Anthony Falls Bridge", "Hennepin Avenue Bridge", "Mississippi"),
+    ("minneapolis", "Hennepin Avenue Bridge", "I-35W St. Anthony Falls Bridge", "Mississippi"),
 )
