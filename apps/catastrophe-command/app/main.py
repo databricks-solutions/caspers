@@ -114,6 +114,7 @@ _CITIES: dict[str, dict[str, Any]] = {
     "tokyo":        {"name": "Tokyo, Japan",           "flag": "🇯🇵", "river": "Sumida",          "bridge_name": "Kachidoki Bridge",               "bridge": (35.66226, 139.77490), "alt_name": "Eitai Bridge",               "alt": (35.67664, 139.78615), "r": 200},
     "chicago":      {"name": "Chicago, IL",            "flag": "🇺🇸", "river": "Chicago River",   "bridge_name": "DuSable Bridge",                 "bridge": (41.88882, -87.62439), "alt_name": "Wells Street Bridge",        "alt": (41.88755, -87.63399), "r": 140},
     "minneapolis":  {"name": "Minneapolis, MN",        "flag": "🇺🇸", "river": "Mississippi",     "bridge_name": "Hennepin Avenue Bridge",         "bridge": (44.98533, -93.26386), "alt_name": "I-35W St. Anthony Falls Bridge", "alt": (44.97948, -93.24479), "r": 200},
+    "new_york":     {"name": "New York, NY",           "flag": "🇺🇸", "river": "East River",      "bridge_name": "Brooklyn Bridge",                "bridge": (40.70567, -73.99633), "alt_name": "Manhattan Bridge",           "alt": (40.70722, -73.99083), "r": 280},
 }
 
 # Hardcoded, city-specific catastrophe per tour stop. Each ties to the city's
@@ -135,6 +136,7 @@ _CITY_CATASTROPHES: dict[str, dict[str, str]] = {
     "tokyo":         {"icon": "📡", "title": "Seismic sensor malfunction shuts the Kachidoki Bridge", "desc": "A faulty seismic sensor triggered a false earthquake alert; the Kachidoki Bridge over the Sumida was automatically shut and awaits inspection.", "label": "closed"},
     "chicago":       {"icon": "🌉", "title": "DuSable Bridge stuck open",                     "desc": "A bascule-lift malfunction during a boat run has left the DuSable Bridge jammed upright over the Chicago River.", "label": "stuck open"},
     "minneapolis":   {"icon": "❄️", "title": "Polar vortex ices the Hennepin Avenue Bridge",   "desc": "A polar vortex has glazed the Hennepin Avenue Bridge deck in black ice. Public Works closed the Mississippi crossing until the salt trucks win.", "label": "iced over"},
+    "new_york":      {"icon": "🎬", "title": "Film shoot traps the Brooklyn Bridge",           "desc": "A movie shoot overran and a stunt car is blocking the span. The East River crossing is shut until the crew clears.", "label": "filming"},
 }
 
 _AREAS = [

@@ -256,6 +256,10 @@ CITIES: Dict[str, City] = {
         "minneapolis", "Minneapolis, MN", "🇺🇸", "Mississippi",
         "Hennepin Avenue Bridge", (44.98533, -93.26386),
         "I-35W St. Anthony Falls Bridge", (44.97948, -93.24479), 200),
+    "new_york": City(
+        "new_york", "New York, NY", "🇺🇸", "East River",
+        "Brooklyn Bridge", (40.70567, -73.99633),
+        "Manhattan Bridge", (40.70722, -73.99083), 280),
 }
 
 
@@ -278,6 +282,7 @@ CITY_CATASTROPHES: Dict[str, dict] = {
     "tokyo":         {"icon": "📡", "title": "Seismic sensor malfunction shuts the Kachidoki Bridge", "desc": "A faulty seismic sensor triggered a false earthquake alert; the Kachidoki Bridge over the Sumida was automatically shut and awaits inspection.", "label": "closed"},
     "chicago":       {"icon": "🌉", "title": "DuSable Bridge stuck open",                     "desc": "A bascule-lift malfunction during a boat run has left the DuSable Bridge jammed upright over the Chicago River.", "label": "stuck open"},
     "minneapolis":   {"icon": "❄️", "title": "Polar vortex ices the Hennepin Avenue Bridge",   "desc": "A polar vortex has glazed the Hennepin Avenue Bridge deck in black ice. Public Works closed the Mississippi crossing until the salt trucks win.", "label": "iced over"},
+    "new_york":      {"icon": "🎬", "title": "Film shoot traps the Brooklyn Bridge",           "desc": "A movie shoot overran and a stunt car is blocking the span. The East River crossing is shut until the crew clears.", "label": "filming"},
 }
 
 

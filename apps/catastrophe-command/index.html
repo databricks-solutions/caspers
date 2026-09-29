@@ -1095,6 +1095,7 @@
     tokyo:         { name: "Tokyo, Japan",           flag: "🇯🇵", river: "Sumida",          bridge_name: "Kachidoki Bridge",               bridge: [35.66226, 139.77490], alt_name: "Eitai Bridge",               alt: [35.67664, 139.78615], r: 200, catastrophe: { icon: "📡", title: "Seismic sensor malfunction shuts the Kachidoki Bridge", desc: "A faulty seismic sensor triggered a false earthquake alert; the Kachidoki Bridge over the Sumida was automatically shut and awaits inspection.", label: "closed" } },
     chicago:       { name: "Chicago, IL",            flag: "🇺🇸", river: "Chicago River",   bridge_name: "DuSable Bridge",                 bridge: [41.88882, -87.62439], alt_name: "Wells Street Bridge",        alt: [41.88755, -87.63399], r: 140, catastrophe: { icon: "🌉", title: "DuSable Bridge stuck open", desc: "A bascule-lift malfunction during a boat run has left the DuSable Bridge jammed upright over the Chicago River.", label: "stuck open" } },
     minneapolis:   { name: "Minneapolis, MN",        flag: "🇺🇸", river: "Mississippi",     bridge_name: "Hennepin Avenue Bridge",         bridge: [44.98533, -93.26386], alt_name: "I-35W St. Anthony Falls Bridge", alt: [44.97948, -93.24479], r: 200, catastrophe: { icon: "❄️", title: "Polar vortex ices the Hennepin Avenue Bridge", desc: "A polar vortex has glazed the Hennepin Avenue Bridge deck in black ice. Public Works closed the Mississippi crossing until the salt trucks win.", label: "iced over" } },
+    new_york:      { name: "New York, NY",           flag: "🇺🇸", river: "East River",      bridge_name: "Brooklyn Bridge",                bridge: [40.70567, -73.99633], alt_name: "Manhattan Bridge",           alt: [40.70722, -73.99083], r: 280, catastrophe: { icon: "🎬", title: "Film shoot traps the Brooklyn Bridge", desc: "A movie shoot overran and a stunt car is blocking the span. The East River crossing is shut until the crew clears.", label: "filming" } },
   };
   function _metersPerDeg(lat) {
     return [111320.0, 111320.0 * Math.cos(lat * Math.PI / 180)];
@@ -1716,6 +1717,7 @@
   let queue = { a: 0, b: 0 };
   let stats = { delivered: 0, reroute: 0, cancelled: 0, reordered: 0, complaints: 0, refunded: 0, refundTotal: 0 };
   let refundedOrderIds = new Set();
+  let notifiedRefundOrderIds = new Set();
   let fleetTarget = 45; // number of concurrent orders (controlled by the Orders slider)
   const QUEUE_BUFFER = 45, QUEUE_SPACING = 26;
   const activeCount = () => vehicles.filter(v => v.status !== "delivered" && v.status !== "cancelled").length;
@@ -2509,6 +2511,8 @@
   function notifyLakebaseRefund(rf, vById, showCard = true) {
     const orderId = String(rf.order_id || "");
     if (!orderId) return false;
+    if (notifiedRefundOrderIds.has(orderId)) return false;
+    notifiedRefundOrderIds.add(orderId);
     const amt = (rf.amount != null && rf.amount !== "")
       ? ` $${(+rf.amount).toFixed(2)}` : "";
     const v = vById.get(orderId);
@@ -3258,6 +3262,41 @@
     _refundPollIv = setInterval(pollRefunds, 1000);
     _statusPollIv = setInterval(pollStatuses, 2000);
   }
+
+  // Agent panel (separate script) calls this after /api/agent/chat returns so
+  // refund cards paint immediately instead of waiting on the 1s poll interval.
+  window.__ccAfterAgentChat = function (steps) {
+    const vById = new Map(vehicles.map(v => [v.id, v]));
+    let nRef = 0;
+    const refundRows = [];
+    for (const step of steps || []) {
+      if (step.error || step.query_id !== "refund_open_complaints") continue;
+      for (const row of step.rows || []) {
+        const orderId = String(row.order_id || "");
+        if (!orderId) continue;
+        const amount = row.amount != null ? row.amount : row.refund_sent;
+        recordRefundStats(orderId, amount);
+        refundRows.push({
+          id: "agent-" + orderId,
+          order_id: orderId,
+          amount,
+          reason: row.reason || "Goodwill refund",
+          kitchen: row.kitchen,
+          kind: row.kind,
+        });
+      }
+    }
+    const cardStart = Math.max(0, refundRows.length - 5);
+    for (let i = 0; i < refundRows.length; i++) {
+      if (notifyLakebaseRefund(refundRows[i], vById, i >= cardStart)) nRef++;
+    }
+    if (nRef) {
+      showBanner("💸", "Refunds issued",
+        `${nRef} refund${nRef > 1 ? "s" : ""} sent straight from the operations database.`);
+    }
+    pollRefunds();
+    pollStatuses();
+  };
   document.addEventListener("visibilitychange", () => {
     if (_pageUnloading) return;
     if (document.visibilityState === "hidden") {
@@ -3361,6 +3400,7 @@
     } catch (e) {}
     stats = { delivered: 0, reroute: 0, cancelled: 0, reordered: 0, complaints: 0, refunded: 0, refundTotal: 0 };
     refundedOrderIds = new Set();
+    notifiedRefundOrderIds = new Set();
     drawBridgeMarker();
     document.getElementById("bridgeBtn").disabled = false;
     running = true; document.getElementById("playBtn").textContent = "⏸ Pause"; document.getElementById("playBtn").classList.add("primary");
@@ -3883,6 +3923,7 @@
     jamFormMsgShown = false; jamEaseMsgShown = false;
     stats = { delivered: 0, reroute: 0, cancelled: 0, reordered: 0, complaints: 0, refunded: 0, refundTotal: 0 };
     refundedOrderIds = new Set();
+    notifiedRefundOrderIds = new Set();
     map.setView(CENTER, 14);
     drawAltMarker();
     drawBridgeMarker();
@@ -4229,6 +4270,10 @@
         addSteps(data.steps || []);
         history.push({ role: "user", content: message });
         if (data.reply) history.push({ role: "assistant", content: data.reply });
+        // Don't wait for the 1s Lakebase poll — Chrome throttles setInterval
+        // while this long POST is in flight (and if the tab is backgrounded).
+        // Paint refunds from the tool rows now, then force a poll for the rest.
+        if (window.__ccAfterAgentChat) window.__ccAfterAgentChat(data.steps || []);
       } catch (e) {
         typing.remove();
         if (e && e.name === "AbortError" && chatTimeout && chatTimeout.aborted) {

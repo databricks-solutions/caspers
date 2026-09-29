@@ -19,4 +19,5 @@ CROSSINGS: tuple[tuple[str, str, str, str], ...] = (
     ("tokyo", "Kachidoki Bridge", "Eitai Bridge", "Sumida"),
     ("chicago", "DuSable Bridge", "Wells Street Bridge", "Chicago River"),
     ("minneapolis", "Hennepin Avenue Bridge", "I-35W St. Anthony Falls Bridge", "Mississippi"),
+    ("new_york", "Brooklyn Bridge", "Manhattan Bridge", "East River"),
 )

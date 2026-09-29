@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import re
+import time
 from decimal import Decimal
 from typing import Any, Callable
 
@@ -409,17 +410,26 @@ class Agent:
             spec["backend"],
             f" ingredient={ingredient}" if ingredient else "",
         )
+        t0 = time.perf_counter()
         try:
             if spec["backend"] == "warehouse":
                 rows = self._warehouse_exec(sql)
             else:
                 rows = self._lakebase_exec(sql)
         except Exception as e:  # noqa: BLE001
-            log.warning(f"Action '{query_id}' failed: {type(e).__name__}: {e}")
+            log.warning(
+                "Action '%s' failed in %.2fs: %s: %s",
+                query_id,
+                time.perf_counter() - t0,
+                type(e).__name__,
+                e,
+            )
             out = {"query_id": query_id, "title": spec["title"], "error": str(e)}
             if ingredient is not None:
                 out["ingredient"] = ingredient
             return out
+        elapsed = time.perf_counter() - t0
+        log.info("Agent action %s finished in %.2fs rows=%s", query_id, elapsed, len(rows or []))
         rows = _sanitize_rows(rows or [])
         result = {
             "query_id": query_id,
@@ -452,8 +462,10 @@ class Agent:
         messages.append({"role": "user", "content": message})
 
         steps: list[dict[str, Any]] = []
+        run_t0 = time.perf_counter()
 
-        for _ in range(MAX_TOOL_ITERATIONS):
+        for i in range(MAX_TOOL_ITERATIONS):
+            llm_t0 = time.perf_counter()
             completion = client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -462,10 +474,26 @@ class Agent:
                 temperature=0,
                 max_tokens=1200,
             )
+            usage = getattr(completion, "usage", None)
+            n_tools = len(getattr(completion.choices[0].message, "tool_calls", None) or [])
+            log.info(
+                "Agent LLM iter=%s tools=%s in %.2fs model=%s usage=%s",
+                i,
+                n_tools,
+                time.perf_counter() - llm_t0,
+                self.model,
+                {
+                    "prompt": getattr(usage, "prompt_tokens", None),
+                    "completion": getattr(usage, "completion_tokens", None),
+                }
+                if usage
+                else None,
+            )
             choice = completion.choices[0].message
             tool_calls = getattr(choice, "tool_calls", None) or []
 
             if not tool_calls:
+                log.info("Agent run done in %.2fs steps=%s", time.perf_counter() - run_t0, len(steps))
                 return {
                     "reply": choice.content or "",
                     "steps": steps,
@@ -538,11 +566,18 @@ class Agent:
                 "content": "Summarize what you did and the results, plainly.",
             }
         )
+        llm_t0 = time.perf_counter()
         final = client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=0,
             max_tokens=800,
+        )
+        log.info(
+            "Agent LLM final-summary in %.2fs; run total %.2fs steps=%s",
+            time.perf_counter() - llm_t0,
+            time.perf_counter() - run_t0,
+            len(steps),
         )
         return {
             "reply": final.choices[0].message.content or "",
